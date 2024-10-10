@@ -1,0 +1,45 @@
+# Ignore build artifacts and cache
+build/
+node_modules/
+coverage/
+coverage.json
+.cache/
+.truffle/
+
+# Ignore environment files and sensitive data
+.env
+.env.local
+.env.*.local
+
+# Ignore logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ignore IDE specific files
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Ignore MacOS specific files
+.DS_Store
+
+# Ignore package-lock.json (optional, if you want to exclude it)
+# package-lock.json
+
+# Ignore compiled contracts
+*.json
+
+# Ignore test output
+*.log
+test/report.json
+
+# Ignore Ganache DB (if you save a persistent one)
+*.db
+
+# Ignore deployment artifacts
+deployments/
+
+# Ignore migrations
+migrations/
