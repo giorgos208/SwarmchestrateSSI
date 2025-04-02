@@ -5,10 +5,11 @@ module.exports = {
   networks: {
     // Local Ganache development network
     development: {
-      host: "127.0.0.1",     // Localhost
-      port: 8545,            // Ganache CLI default port
-      network_id: "*",       // Any network (default: none)
+      host: "127.0.0.1",
+      port: 8545,
+      network_id: "5777", // Set to a fixed network ID
     },
+   
     // Sepolia test network
     sepolia: {
       provider: () => new HDWalletProvider({
@@ -33,6 +34,7 @@ module.exports = {
     solc: {
       version: "^0.8.20",     // Solidity version
       settings: {
+        viaIR: true,
         optimizer: {
           enabled: true,
           runs: 200,         // Optimize for how many times you intend to run the code

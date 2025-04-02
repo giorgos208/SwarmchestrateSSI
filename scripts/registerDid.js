@@ -1,58 +1,117 @@
+// scripts/registerDID.js
+
 const Web3 = require('web3');
-const DIDRegistry = require('../build/contracts/DIDRegistry.json');
-const { ethers } = require('ethers');
-const crypto = require('crypto');
+const Swarmchestrate = require('../build/contracts/Swarmchestrate.json');
+const fs = require('fs');
+const path = require('path');
 
-async function registerDID(isResourceOwner = true) {  // Add a flag to specify ResourceOwner or Resource
+/**
+ * Registers a DID in a specified Universe.
+ * This associates the newly generated address with 
+ * a DIDDocument on-chain for Identity & Access in Swarmchestrate.
+ */
+async function registerDID(universeId, accountAddress) {
+  console.log('========================================================');
+  console.log('  Registering DID in Swarmchestrate Universe            ');
+  console.log('========================================================\n');
+
   try {
-    const web3 = new Web3('http://127.0.0.1:8545'); // Connect to Ganache
-
-    const accounts = await web3.eth.getAccounts();
-    if (accounts.length === 0) {
-      console.error("No accounts found. Ensure that Ganache is running.");
+    // 1) Load the local data/<accountAddress>.json
+    const filePath = path.join(__dirname, `../data/${accountAddress}.json`);
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ DID account file not found for address: ${accountAddress}`);
       return;
     }
+    const accountData = JSON.parse(fs.readFileSync(filePath));
 
+    // 2) Connect to Ethereum node
+    const web3 = new Web3('http://127.0.0.1:8545');
+    web3.eth.accounts.wallet.add(accountData.privateKey);
+    web3.eth.defaultAccount = accountData.address;
+
+    // 3) Retrieve Swarmchestrate contract
     const networkId = await web3.eth.net.getId();
-    const deployedNetwork = DIDRegistry.networks[networkId];
+    const deployedNetwork = Swarmchestrate.networks[networkId];
     if (!deployedNetwork || !deployedNetwork.address) {
-      console.error(`DIDRegistry contract not deployed on network ID ${networkId}`);
+      console.error(`❌ Swarmchestrate not deployed on network ID ${networkId}`);
       return;
     }
 
     const contractAddress = deployedNetwork.address;
-    const didRegistry = new web3.eth.Contract(DIDRegistry.abi, contractAddress);
+    const swarmchestrate = new web3.eth.Contract(Swarmchestrate.abi, contractAddress);
 
-    // Generate a new wallet for the DID using ethers.js
-    const wallet = ethers.Wallet.createRandom();
-    const didString = `did:example:${wallet.address}`; // DID string
-    const didBytes32 = web3.utils.soliditySha3(didString); // Convert DID to bytes32
+    console.log(`[1] Universe ID: ${universeId}`);
+    console.log(`    Using DID:   ${accountData.did}`);
+    console.log(`    Caller:      ${accountData.address}`);
 
-    console.log(`DID: ${didString}`);
-    console.log(`Public Key (Address): ${wallet.address}`);
-    console.log(`Private Key: ${wallet.privateKey}`);
+    console.log('\n[2] Preparing DID registration transaction...');
+    const verificationMethods = [
+      {
+        id: 1,
+        typeOfKey: 1, // example numeric type
+        controller: 0,
+        publicKeyMultibase: web3.utils.hexToBytes(accountData.address),
+      },
+    ];
 
-    // Register the DID: Call the correct function based on entity type (ResourceOwner/Resource)
-    let receipt;
-    if (isResourceOwner) {
-      receipt = await didRegistry.methods
-        .registerResourceOwner(didBytes32, wallet.address)  // Call registerResourceOwner for ResourceOwner
-        .send({ from: accounts[0], gas: 300000 });
+    const authentications = [1];
+    const services = [
+      {
+        id: 1,
+        typeOfService: 1,
+        serviceEndpoint: "https://example.com/messaging",
+      },
+    ];
+
+    const gasEstimate = await swarmchestrate.methods.registerDID(
+      universeId,
+      verificationMethods,
+      authentications,
+      services
+    ).estimateGas({ from: accountData.address });
+
+    const receipt = await swarmchestrate.methods.registerDID(
+      universeId,
+      verificationMethods,
+      authentications,
+      services
+    ).send({ from: accountData.address, gas: gasEstimate });
+
+    const event = receipt.events.DIDRegistered;
+    const didId = event.returnValues.did;
+
+    console.log(`    ✅ DID registered with ID=${didId}.`);
+    console.log(`       Transaction Hash: ${receipt.transactionHash}`);
+
+    // Verify the DID
+    const fetchedDID = await swarmchestrate.methods.getDIDId(universeId, accountData.address).call();
+    if (parseInt(fetchedDID) !== parseInt(didId)) {
+      console.error(`❌ DID verification mismatch (expected ${didId}, got ${fetchedDID}).`);
     } else {
-      receipt = await didRegistry.methods
-        .registerResource(didBytes32, wallet.address)  // Call registerResource for Resource
-        .send({ from: accounts[0], gas: 300000 });
+      console.log(`    ✔ DID verified successfully. (DID ID = ${fetchedDID})`);
     }
 
-    console.log(`DID ${didString} registered successfully. Tx: ${receipt.transactionHash}`);
-    return { did: didString, wallet };
+    console.log('\n========================================================');
+    console.log('  DID registration complete. This DID can now issue or   ');
+    console.log('  hold credentials, and participate in on-chain actions. ');
+    console.log('========================================================\n');
+
+    return { didId, account: accountData };
   } catch (error) {
-    console.error("Error registering DID:", error.message);
+    console.error('❌ Error registering DID:', error);
     if (error.receipt) {
-      console.error("Transaction Receipt:", error.receipt);
+      console.error('Transaction Receipt:', error.receipt);
     }
     return null;
   }
 }
 
 module.exports = registerDID;
+
+// Example CLI usage:
+//   node scripts/registerDID.js <universeId> <accountAddress>
+if (require.main === module) {
+  const universeId = 1;
+  const accountAddress = '0x5F776f45A82d55aFD71EA75cDF892fa594fA3D48';
+  registerDID(universeId, accountAddress);
+}
