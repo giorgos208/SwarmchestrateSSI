@@ -389,7 +389,7 @@ contract Swarmchestrate is Ownable, Pausable, ReentrancyGuard {
         if (totalVotes == 0) {
             return (0, 0);
         }
-        scaledAverage = (ps.totalScore * 100) / totalVotes; // e.g. 750 => 7.50
+        scaledAverage = (ps.totalScore * 100) / totalVotes; // e.g. 750 => 7.50. This non-decimals conversion logic is meant to be interpreted off-chain.
     }
 
     // Pausing
